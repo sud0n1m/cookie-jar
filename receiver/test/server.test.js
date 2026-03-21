@@ -158,6 +158,19 @@ describe('POST /api/cookies', () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.cookieCount, 0);
   });
+
+  it('writes cookie files with restricted permissions (0600)', async () => {
+    const res = await request(app)
+      .post('/api/cookies')
+      .set('Authorization', AUTH_HEADER)
+      .send({ domain: 'test-domain.com', cookies: SAMPLE_COOKIES });
+    assert.equal(res.status, 200);
+
+    const filepath = path.join(COOKIES_DIR, 'test-domain.com.json');
+    const stats = fs.statSync(filepath);
+    const mode = stats.mode & 0o777;
+    assert.equal(mode, 0o600, `Expected file mode 0600 but got 0${mode.toString(8)}`);
+  });
 });
 
 // ─── GET /api/cookies/:domain ───────────────────────────────────

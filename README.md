@@ -279,13 +279,41 @@ cookie-jar/
 
 ## Security
 
-- **Bearer token authentication** - Random 64-char token generated during setup
-- **Cookies are sensitive data** - Never commit `cookies/*.json` or `.env` to git
-- **HTTPS recommended** - For production deployments
-- **CORS enabled** - Only authenticated requests accepted
-- **File-based storage** - Cookies saved as JSON files for inspection/debugging
+Cookies are essentially passwords. A stolen session cookie grants the same access as knowing the user's credentials. Treat every part of this system accordingly.
 
-⚠️ **Important:** Cookies are essentially passwords. Treat them accordingly. Use HTTPS in production, rotate tokens regularly, and never expose your receiver publicly without authentication.
+### Network & Transport
+
+- **Never expose the receiver to the public internet.** Run it on `localhost`, or access it over [Tailscale](https://tailscale.com/), WireGuard, an SSH tunnel, or another encrypted transport.
+- **Plain HTTP is vulnerable to MITM.** The bearer token and cookie payloads are sent in cleartext over HTTP. You **must** use encrypted transport (VPN, SSH tunnel, or a reverse proxy with TLS) for anything beyond `localhost`.
+- **Bearer token authenticates requests but does not encrypt them.** Transport encryption (TLS/VPN) is a separate layer — you need both.
+- For non-VPN setups, consider running the receiver behind a reverse proxy (nginx, Caddy) with TLS termination.
+
+### Stored Data
+
+- **Cookie files are as sensitive as passwords.** The receiver writes them with restricted permissions (`0600` — owner read/write only), but the server process owner must be secured too.
+- Never commit `cookies/*.json` or `.env` to git (both are gitignored by default).
+- Rotate your bearer token periodically and after any suspected compromise.
+
+### Extension
+
+- **Load as an unpacked extension from source**, not from a store. This way you control exactly what runs in your browser.
+- The extension is small enough to audit (~200 lines of JS across `popup.js` and `options.js`). **Read the source before installing.**
+- The extension only sends cookies for the **current tab's domain** (principle of least privilege) — it never bulk-exports all browser cookies.
+
+### Cookie Lifetime
+
+- Session cookies expire when the browser closes; persistent cookies have an `expirationDate`. Stolen cookies therefore have a limited window of usefulness, but you should still treat any leak as a credential compromise.
+
+### Summary Checklist
+
+| Concern | Mitigation |
+|---|---|
+| Bearer token auth | Random 64-char token, generated at install |
+| Transport encryption | Use Tailscale / WireGuard / SSH tunnel / TLS reverse proxy |
+| File permissions | Cookie files written with mode `0600` |
+| Extension trust | Load unpacked from source; audit the ~200 lines of JS |
+| Cookie scope | Only current-tab domain sent, never all cookies |
+| Data at rest | `cookies/` and `.env` gitignored; restrict server user |
 
 ## Manual Setup
 

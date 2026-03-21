@@ -75,7 +75,9 @@ app.post('/api/cookies', authenticate, async (req, res) => {
     const filename = `${domain}.json`;
     const filepath = path.join(COOKIES_DIR, filename);
     
-    fs.writeFileSync(filepath, JSON.stringify({ domain, cookies }, null, 2));
+    fs.writeFileSync(filepath, JSON.stringify({ domain, cookies }, null, 2), { mode: 0o600 });
+    // Ensure restricted permissions even if file already existed
+    fs.chmodSync(filepath, 0o600);
     
     console.log(`[${new Date().toISOString()}] Saved ${cookies.length} cookies for ${domain}`);
     
