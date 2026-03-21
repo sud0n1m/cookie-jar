@@ -2,7 +2,7 @@
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PLIST_LABEL="com.ziggy.cookie-jar"
+PLIST_LABEL="com.cookie-jar.receiver"
 PLIST_FILE="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 
 echo "🍪 Cookie Jar Receiver Setup"

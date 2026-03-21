@@ -3,7 +3,7 @@
 ## Mac Mini Setup (5 minutes)
 
 ```bash
-cd /Users/ziggy/.openclaw/workspace/projects/cookie-jar/receiver
+cd ./receiver
 ./install.sh
 ```
 
@@ -20,7 +20,7 @@ cd /Users/ziggy/.openclaw/workspace/projects/cookie-jar/receiver
 2. **Configure the extension:**
    - Click the Cookie Jar icon 🍪 in Chrome toolbar
    - Click "⚙️ Settings"
-   - Receiver URL: `http://ziggy:3333/api/cookies`
+   - Receiver URL: `http://YOUR_SERVER:3333/api/cookies`
    - Bearer token: (paste token from Mac Mini setup)
    - Click "Save Settings"
 
@@ -48,9 +48,9 @@ curl http://localhost:3333/api/status
 
 ## Troubleshooting
 
-**Can't reach ziggy:3333?**
+**Can't reach the server?**
 - Verify Tailscale is connected on both machines
-- Try `ping ziggy` from your laptop
+- Try `ping YOUR_SERVER` from your laptop
 
 **Import fails?**
 - Check that browser-use is installed: `~/.browser-use-env/bin/browser-use --version`

@@ -46,7 +46,7 @@ cd receiver
 This will:
 - Install npm dependencies (`express`, `cors`)
 - Generate a random Bearer token and save to `.env`
-- Create and load a launchd service (`com.ziggy.cookie-jar`)
+- Create and load a launchd service (`com.cookie-jar.receiver`)
 - Start the receiver on port 3333
 
 **Copy the auth token** shown during setup — you'll need it for the extension.
@@ -75,7 +75,7 @@ tail -f receiver/logs/stdout.log
 3. **Configure the extension**:
    - Click the Cookie Jar icon in Chrome toolbar
    - Click "⚙️ Settings"
-   - Enter your receiver URL: `http://ziggy:3333/api/cookies`
+   - Enter your receiver URL: `http://YOUR_SERVER:3333/api/cookies`
    - Paste the Bearer token from the receiver setup
    - Click "Save Settings"
 
@@ -147,7 +147,7 @@ Retrieve saved cookies for a domain (debugging).
 
 **Example:**
 ```bash
-curl -H "Authorization: Bearer YOUR_TOKEN" http://ziggy:3333/api/cookies/www.ft.com
+curl -H "Authorization: Bearer YOUR_TOKEN" http://YOUR_SERVER:3333/api/cookies/www.ft.com
 ```
 
 ### GET /api/status
@@ -206,7 +206,7 @@ cookie-jar/
    launchctl list | grep cookie-jar
    ```
 
-2. Verify the receiver URL is correct in extension settings (should be `http://ziggy:3333/api/cookies`)
+2. Verify the receiver URL is correct in extension settings (should be `http://YOUR_SERVER:3333/api/cookies`)
 
 3. Check logs for errors:
    ```bash
@@ -240,8 +240,8 @@ To modify the receiver:
 1. Edit `receiver/server.js`
 2. Reload the service:
    ```bash
-   launchctl unload ~/Library/LaunchAgents/com.ziggy.cookie-jar.plist
-   launchctl load ~/Library/LaunchAgents/com.ziggy.cookie-jar.plist
+   launchctl unload ~/Library/LaunchAgents/com.cookie-jar.receiver.plist
+   launchctl load ~/Library/LaunchAgents/com.cookie-jar.receiver.plist
    ```
 
 ## License

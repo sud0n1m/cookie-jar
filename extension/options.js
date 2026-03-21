@@ -1,7 +1,7 @@
 // Load saved settings
 async function loadSettings() {
   const settings = await chrome.storage.sync.get({
-    receiverUrl: 'http://ziggy:3333/api/cookies',
+    receiverUrl: 'http://localhost:3333/api/cookies',
     bearerToken: ''
   });
   
