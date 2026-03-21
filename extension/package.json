@@ -1,0 +1,12 @@
+{
+  "name": "cookie-jar-extension",
+  "version": "1.0.0",
+  "description": "Chrome extension for Cookie Jar",
+  "private": true,
+  "scripts": {
+    "icons": "node generate-icons.js"
+  },
+  "devDependencies": {
+    "canvas": "^2.11.2"
+  }
+}

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Cookie Jar Settings</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      padding: 40px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    
+    .subtitle {
+      color: #888;
+      margin-bottom: 32px;
+      font-size: 14px;
+    }
+    
+    .form-group {
+      margin-bottom: 24px;
+    }
+    
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #ccc;
+    }
+    
+    input {
+      width: 100%;
+      padding: 12px;
+      background: #252525;
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 14px;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+    
+    input:focus {
+      outline: none;
+      border-color: #4a9eff;
+      background: #2a2a2a;
+    }
+    
+    .help-text {
+      font-size: 12px;
+      color: #666;
+      margin-top: 6px;
+    }
+    
+    button {
+      padding: 12px 24px;
+      background: #4a9eff;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    button:hover {
+      background: #3a8eef;
+    }
+    
+    button:active {
+      transform: scale(0.98);
+    }
+    
+    .status {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      display: none;
+    }
+    
+    .status.success {
+      background: #1a4d2e;
+      color: #4ade80;
+      border: 1px solid #22c55e;
+    }
+    
+    .status.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <h1>🍪 Cookie Jar Settings</h1>
+  <div class="subtitle">Configure your receiver endpoint and authentication</div>
+  
+  <form id="settingsForm">
+    <div class="form-group">
+      <label for="receiverUrl">Receiver URL</label>
+      <input 
+        type="text" 
+        id="receiverUrl" 
+        placeholder="http://ziggy:3333/api/cookies"
+        required
+      >
+      <div class="help-text">Full URL to the receiver's /api/cookies endpoint</div>
+    </div>
+    
+    <div class="form-group">
+      <label for="bearerToken">Bearer Token</label>
+      <input 
+        type="password" 
+        id="bearerToken" 
+        placeholder="Enter your auth token"
+        required
+      >
+      <div class="help-text">Authentication token from the receiver service</div>
+    </div>
+    
+    <button type="submit">Save Settings</button>
+    
+    <div class="status" id="status"></div>
+  </form>
+  
+  <script src="options.js"></script>
+</body>
+</html>
