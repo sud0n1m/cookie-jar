@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 
 const app = express();
 const PORT = 3333;
@@ -80,19 +79,6 @@ app.post('/api/cookies', authenticate, async (req, res) => {
     
     console.log(`[${new Date().toISOString()}] Saved ${cookies.length} cookies for ${domain}`);
     
-    // Import cookies into browser-use
-    try {
-      const cmd = `source ~/.browser-use-env/bin/activate && browser-use cookies import "${filepath}"`;
-      execSync(cmd, { 
-        shell: '/bin/bash',
-        stdio: 'inherit'
-      });
-      console.log(`[${new Date().toISOString()}] Imported cookies into browser-use for ${domain}`);
-    } catch (importError) {
-      console.error(`[${new Date().toISOString()}] Failed to import cookies into browser-use:`, importError.message);
-      // Don't fail the request if import fails - cookies are still saved
-    }
-    
     res.json({ 
       success: true, 
       domain,
@@ -153,6 +139,20 @@ function convertCookies(cookies, format, domain) {
       });
       return lines.join('\n');
       
+    case 'browser-use':
+      // browser-use format - Chrome native with url field added
+      return cookies.map(c => ({
+        name: c.name,
+        value: c.value,
+        domain: c.domain,
+        path: c.path || '/',
+        secure: c.secure || false,
+        httpOnly: c.httpOnly || false,
+        sameSite: c.sameSite || 'Lax',
+        expires: c.expirationDate || -1,
+        url: `${c.secure ? 'https' : 'http'}://${c.domain.replace(/^\./, '')}${c.path || '/'}`
+      }));
+
     case 'raw':
     default:
       // Raw Chrome cookie format
@@ -201,9 +201,13 @@ app.get('/api/cookies/:domain', authenticate, (req, res) => {
   }
 });
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Cookie Jar receiver listening on port ${PORT}`);
-  console.log(`Cookies will be saved to: ${COOKIES_DIR}`);
-  console.log(`Auth token configured: ${!!process.env.COOKIE_JAR_TOKEN}`);
-});
+// Start server (only when run directly, not when imported for tests)
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Cookie Jar receiver listening on port ${PORT}`);
+    console.log(`Cookies will be saved to: ${COOKIES_DIR}`);
+    console.log(`Auth token configured: ${!!process.env.COOKIE_JAR_TOKEN}`);
+  });
+}
+
+module.exports = { app, convertCookies, COOKIES_DIR };

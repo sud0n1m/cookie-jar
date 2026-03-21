@@ -42,7 +42,8 @@ No more fighting with bot detection. No more manually solving CAPTCHAs in CI. Ju
 └──────────┬──────────┘
            │ Exports cookies in multiple formats:
            │  • Playwright
-           │  • Puppeteer  
+           │  • Puppeteer
+           │  • browser-use
            │  • Netscape (curl)
            │  • Raw JSON
            ▼
@@ -65,7 +66,7 @@ No more fighting with bot detection. No more manually solving CAPTCHAs in CI. Ju
 ### 1. Install the Receiver Service
 
 ```bash
-git clone https://github.com/sud0n1m-ziggy/cookie-jar.git
+git clone https://github.com/your-username/cookie-jar.git
 cd cookie-jar/receiver
 ./install.sh
 ```
@@ -225,6 +226,7 @@ Retrieve saved cookies for a domain.
 - `raw` (default) - Chrome's native cookie format
 - `playwright` - Ready for `context.addCookies()`
 - `puppeteer` - Ready for `page.setCookie()`
+- `browser-use` - Ready for browser-use CLI import
 - `netscape` - Classic cookies.txt format (for curl)
 
 **Example:**

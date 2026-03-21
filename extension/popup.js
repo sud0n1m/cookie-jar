@@ -74,7 +74,7 @@ async function sendCookies() {
     if (!settings.bearerToken) {
       showStatus('⚠️ No auth token configured. Please set it in Settings.', 'error');
       btn.disabled = false;
-      btn.textContent = 'Send to Ziggy';
+      btn.textContent = 'Send Cookies';
       return;
     }
     

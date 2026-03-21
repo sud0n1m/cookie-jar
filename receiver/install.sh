@@ -43,7 +43,7 @@ cat > "$PLIST_FILE" << EOF
   
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/local/bin/node</string>
+    <string>__NODE_PATH__</string>
     <string>${SCRIPT_DIR}/server.js</string>
   </array>
   
@@ -55,7 +55,7 @@ cat > "$PLIST_FILE" << EOF
     <key>COOKIE_JAR_TOKEN</key>
     <string>__TOKEN_PLACEHOLDER__</string>
     <key>PATH</key>
-    <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
   </dict>
   
   <key>RunAtLoad</key>
@@ -73,7 +73,9 @@ cat > "$PLIST_FILE" << EOF
 </plist>
 EOF
 
-# Read token from .env and inject into plist
+# Inject node path and token into plist
+NODE_PATH=$(which node)
+sed -i '' "s|__NODE_PATH__|$NODE_PATH|" "$PLIST_FILE"
 TOKEN=$(grep COOKIE_JAR_TOKEN "$ENV_FILE" | cut -d '=' -f2)
 sed -i '' "s/__TOKEN_PLACEHOLDER__/$TOKEN/" "$PLIST_FILE"
 
