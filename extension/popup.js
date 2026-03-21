@@ -100,14 +100,14 @@ async function sendCookies() {
     }
     
     const result = await response.json();
-    showStatus(`✅ Sent ${cookies.length} cookies to Ziggy`, 'success');
+    showStatus(`✅ Sent ${cookies.length} cookies successfully`, 'success');
     
   } catch (error) {
     console.error('Send error:', error);
     showStatus(`❌ Error: ${error.message}`, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Send to Ziggy';
+    btn.textContent = 'Send Cookies';
   }
 }
 

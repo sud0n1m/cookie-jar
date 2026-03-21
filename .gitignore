@@ -1,20 +1,41 @@
 # Dependencies
 node_modules/
+package-lock.json
 
 # Environment variables
 .env
+.env.local
+.env.*.local
 
-# Cookies data
+# Cookies data (SENSITIVE - never commit!)
+receiver/cookies/
 receiver/cookies/*.json
+*.cookies.json
 
 # Logs
 receiver/logs/
+*.log
 
 # macOS
 .DS_Store
+.AppleDouble
+.LSOverride
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+
+# Testing
+coverage/
+.nyc_output/
+
+# Build artifacts
+dist/
+build/
+
+# Screenshots from examples
+examples/*.png
+examples/*.html

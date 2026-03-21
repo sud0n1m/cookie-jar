@@ -109,10 +109,62 @@ app.post('/api/cookies', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/cookies/:domain - Retrieve saved cookies for debugging
+// Convert Chrome cookies to different formats
+function convertCookies(cookies, format, domain) {
+  switch (format) {
+    case 'playwright':
+      // Playwright format - ready for context.addCookies()
+      return cookies.map(c => ({
+        name: c.name,
+        value: c.value,
+        domain: c.domain,
+        path: c.path,
+        expires: c.expirationDate ? c.expirationDate : -1,
+        httpOnly: c.httpOnly || false,
+        secure: c.secure || false,
+        sameSite: c.sameSite || 'Lax'
+      }));
+      
+    case 'puppeteer':
+      // Puppeteer format - ready for page.setCookie()
+      return cookies.map(c => ({
+        name: c.name,
+        value: c.value,
+        domain: c.domain,
+        path: c.path,
+        expires: c.expirationDate || -1,
+        httpOnly: c.httpOnly || false,
+        secure: c.secure || false,
+        sameSite: c.sameSite || 'Lax'
+      }));
+      
+    case 'netscape':
+      // Netscape cookies.txt format (for curl)
+      const lines = ['# Netscape HTTP Cookie File', '# This is a generated file!  Do not edit.', ''];
+      cookies.forEach(c => {
+        const domain_flag = c.domain.startsWith('.') ? 'TRUE' : 'FALSE';
+        const path = c.path || '/';
+        const secure = c.secure ? 'TRUE' : 'FALSE';
+        const expiration = c.expirationDate ? Math.floor(c.expirationDate) : 0;
+        const name = c.name;
+        const value = c.value;
+        
+        lines.push(`${c.domain}\t${domain_flag}\t${path}\t${secure}\t${expiration}\t${name}\t${value}`);
+      });
+      return lines.join('\n');
+      
+    case 'raw':
+    default:
+      // Raw Chrome cookie format
+      return cookies;
+  }
+}
+
+// GET /api/cookies/:domain - Retrieve saved cookies with format conversion
 app.get('/api/cookies/:domain', authenticate, (req, res) => {
   try {
     const { domain } = req.params;
+    const { format = 'raw' } = req.query;
     const filename = `${domain}.json`;
     const filepath = path.join(COOKIES_DIR, filename);
     
@@ -123,7 +175,22 @@ app.get('/api/cookies/:domain', authenticate, (req, res) => {
     }
     
     const data = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-    res.json(data);
+    
+    // For netscape format, return as text/plain
+    if (format === 'netscape') {
+      const cookiesTxt = convertCookies(data.cookies, 'netscape', domain);
+      res.setHeader('Content-Type', 'text/plain');
+      return res.send(cookiesTxt);
+    }
+    
+    // For other formats, return JSON
+    const converted = convertCookies(data.cookies, format, domain);
+    res.json({
+      domain: data.domain,
+      cookies: converted,
+      format: format,
+      count: data.cookies.length
+    });
     
   } catch (error) {
     console.error('Error retrieving cookies:', error);
