@@ -177,12 +177,23 @@ app.get('/api/cookies/:domain', authenticate, (req, res) => {
     const { domain } = req.params;
     const { format = 'raw' } = req.query;
     const filename = `${domain}.json`;
-    const filepath = path.join(COOKIES_DIR, filename);
+    let filepath = path.join(COOKIES_DIR, filename);
     
     if (!fs.existsSync(filepath)) {
-      return res.status(404).json({ 
-        error: `No cookies found for domain: ${domain}` 
-      });
+      // Try www-prefix fallback: www.example.com ↔ example.com
+      const altDomain = domain.startsWith('www.')
+        ? domain.slice(4)
+        : `www.${domain}`;
+      const altFilepath = path.join(COOKIES_DIR, `${altDomain}.json`);
+
+      if (!fs.existsSync(altFilepath)) {
+        return res.status(404).json({
+          error: `No cookies found for domain: ${domain}`
+        });
+      }
+
+      // Use the fallback file
+      filepath = altFilepath;
     }
     
     const data = JSON.parse(fs.readFileSync(filepath, 'utf8'));

@@ -261,6 +261,68 @@ describe('GET /api/cookies/:domain', () => {
   });
 });
 
+// ─── www-prefix fallback ─────────────────────────────────────────
+
+describe('GET /api/cookies/:domain www-prefix fallback', () => {
+  before(() => {
+    // Save cookies under www.example-www.com
+    fs.writeFileSync(
+      path.join(COOKIES_DIR, 'www.example-www.com.json'),
+      JSON.stringify({ domain: 'www.example-www.com', cookies: SAMPLE_COOKIES }, null, 2)
+    );
+    // Save cookies under example-bare.com (no www)
+    fs.writeFileSync(
+      path.join(COOKIES_DIR, 'example-bare.com.json'),
+      JSON.stringify({ domain: 'example-bare.com', cookies: SAMPLE_COOKIES }, null, 2)
+    );
+  });
+
+  after(() => {
+    cleanupCookies('www.example-www.com');
+    cleanupCookies('example-bare.com');
+  });
+
+  it('retrieves www.example-www.com cookies via example-www.com', async () => {
+    const res = await request(app)
+      .get('/api/cookies/example-www.com')
+      .set('Authorization', AUTH_HEADER);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.domain, 'www.example-www.com');
+    assert.equal(res.body.count, 2);
+  });
+
+  it('retrieves example-bare.com cookies via www.example-bare.com', async () => {
+    const res = await request(app)
+      .get('/api/cookies/www.example-bare.com')
+      .set('Authorization', AUTH_HEADER);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.domain, 'example-bare.com');
+    assert.equal(res.body.count, 2);
+  });
+
+  it('exact match takes priority over fallback', async () => {
+    // Create both exact and alternate files
+    fs.writeFileSync(
+      path.join(COOKIES_DIR, 'exact-test.com.json'),
+      JSON.stringify({ domain: 'exact-test.com', cookies: [SAMPLE_COOKIES[0]] }, null, 2)
+    );
+    fs.writeFileSync(
+      path.join(COOKIES_DIR, 'www.exact-test.com.json'),
+      JSON.stringify({ domain: 'www.exact-test.com', cookies: SAMPLE_COOKIES }, null, 2)
+    );
+
+    const res = await request(app)
+      .get('/api/cookies/exact-test.com')
+      .set('Authorization', AUTH_HEADER);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.domain, 'exact-test.com');
+    assert.equal(res.body.count, 1); // exact match has 1 cookie, not 2
+
+    cleanupCookies('exact-test.com');
+    cleanupCookies('www.exact-test.com');
+  });
+});
+
 // ─── Cookie Format Conversion (unit tests) ──────────────────────
 
 describe('convertCookies', () => {
