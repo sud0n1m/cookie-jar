@@ -2,10 +2,19 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
+const { execSync } = require('child_process');
+const crypto = require('crypto');
+const archiver = require('archiver');
 
 const app = express();
 const PORT = 3333;
 const COOKIES_DIR = path.join(__dirname, 'cookies');
+
+const TS_DOMAIN = 'ziggy.tail7f7a2.ts.net';
+const CERTS_DIR = path.join(__dirname, 'certs');
+const CERT_PATH = path.join(CERTS_DIR, `${TS_DOMAIN}.crt`);
+const KEY_PATH = path.join(CERTS_DIR, `${TS_DOMAIN}.key`);
 
 // Ensure cookies directory exists
 if (!fs.existsSync(COOKIES_DIR)) {
@@ -203,13 +212,192 @@ app.get('/api/cookies/:domain', authenticate, (req, res) => {
   }
 });
 
-// Start server (only when run directly, not when imported for tests)
-if (require.main === module) {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Cookie Jar receiver listening on port ${PORT}`);
-    console.log(`Cookies will be saved to: ${COOKIES_DIR}`);
-    console.log(`Auth token configured: ${!!process.env.COOKIE_JAR_TOKEN}`);
+// ─── Setup Endpoints ────────────────────────────────────────────
+
+const EXTENSION_DIR = path.join(__dirname, '..', 'extension');
+
+// GET /setup - Serve setup page with download link and instructions
+app.get('/setup', (req, res) => {
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Cookie Jar Setup</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      display: flex;
+      justify-content: center;
+      padding: 60px 20px;
+    }
+    .container { max-width: 520px; width: 100%; }
+    h1 { font-size: 32px; color: #fff; margin-bottom: 8px; }
+    .subtitle { color: #888; font-size: 15px; margin-bottom: 40px; }
+    .download-btn {
+      display: inline-block;
+      padding: 14px 28px;
+      background: #4a9eff;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-bottom: 40px;
+    }
+    .download-btn:hover { background: #3a8eef; }
+    h2 { font-size: 18px; color: #fff; margin-bottom: 16px; }
+    ol { padding-left: 20px; line-height: 2; color: #ccc; font-size: 14px; }
+    code {
+      background: #252525;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+      color: #4a9eff;
+    }
+    .note {
+      margin-top: 32px;
+      padding: 16px;
+      background: #1a4d2e;
+      border: 1px solid #22c55e;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #4ade80;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🍪 Cookie Jar</h1>
+    <div class="subtitle">Self-configuring Chrome extension</div>
+
+    <a class="download-btn" href="/setup/extension.zip">⬇ Download Extension</a>
+
+    <h2>Install Instructions</h2>
+    <ol>
+      <li>Download the extension zip above</li>
+      <li>Unzip the downloaded file</li>
+      <li>Open Chrome and go to <code>chrome://extensions</code></li>
+      <li>Enable <strong>Developer mode</strong> (top-right toggle)</li>
+      <li>Click <strong>Load unpacked</strong> and select the unzipped folder</li>
+    </ol>
+
+    <div class="note">
+      ✅ This extension is pre-configured with your receiver URL and auth token. No manual setup needed!
+    </div>
+  </div>
+</body>
+</html>`;
+
+  res.type('html').send(html);
+});
+
+// GET /setup/extension.zip - Download pre-configured extension
+app.get('/setup/extension.zip', (req, res) => {
+  const token = process.env.COOKIE_JAR_TOKEN;
+  if (!token) {
+    return res.status(500).json({ error: 'Server misconfigured: COOKIE_JAR_TOKEN not set' });
+  }
+
+  // Auto-detect receiver URL from Host header
+  const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+  const host = req.headers.host;
+  const receiverUrl = `${protocol}://${host}/api/cookies`;
+
+  const config = JSON.stringify({ receiverUrl, token }, null, 2);
+
+  res.set({
+    'Content-Type': 'application/zip',
+    'Content-Disposition': 'attachment; filename="cookie-jar-extension.zip"'
   });
+
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.on('error', (err) => {
+    console.error('Archive error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to create extension zip' });
+    }
+  });
+  archive.pipe(res);
+
+  // Add all extension files
+  archive.directory(EXTENSION_DIR, false);
+
+  // Add baked-in config.json (overrides any existing one)
+  archive.append(config, { name: 'config.json' });
+
+  archive.finalize();
+});
+
+// Check if TLS cert expires within the given number of days
+function certExpiresWithinDays(certPath, days) {
+  try {
+    const pem = fs.readFileSync(certPath, 'utf8');
+    const cert = new crypto.X509Certificate(pem);
+    const expiryDate = new Date(cert.validTo);
+    const threshold = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    return expiryDate < threshold;
+  } catch (err) {
+    console.warn(`[TLS] Could not check cert expiry: ${err.message}`);
+    return true; // treat unreadable cert as needing renewal
+  }
 }
 
-module.exports = { app, convertCookies, COOKIES_DIR };
+// Attempt to renew Tailscale cert if missing or expiring soon
+function renewCertIfNeeded() {
+  const certsExist = fs.existsSync(CERT_PATH) && fs.existsSync(KEY_PATH);
+
+  if (certsExist && !certExpiresWithinDays(CERT_PATH, 14)) {
+    return; // cert is present and valid for >14 days
+  }
+
+  const reason = certsExist ? 'cert expires within 14 days' : 'certs not found';
+  console.log(`[TLS] Renewing Tailscale cert (${reason})...`);
+
+  try {
+    fs.mkdirSync(CERTS_DIR, { recursive: true });
+    execSync(`tailscale cert --cert-file "${CERT_PATH}" --key-file "${KEY_PATH}" "${TS_DOMAIN}"`, {
+      timeout: 30000,
+      stdio: 'pipe'
+    });
+    console.log('[TLS] Tailscale cert renewed successfully');
+  } catch (err) {
+    console.warn(`[TLS] Failed to renew cert: ${err.message}`);
+  }
+}
+
+// Start server (only when run directly, not when imported for tests)
+if (require.main === module) {
+  // Try to renew certs before starting
+  renewCertIfNeeded();
+
+  const certsExist = fs.existsSync(CERT_PATH) && fs.existsSync(KEY_PATH);
+
+  if (certsExist) {
+    const tlsOptions = {
+      cert: fs.readFileSync(CERT_PATH),
+      key: fs.readFileSync(KEY_PATH)
+    };
+    https.createServer(tlsOptions, app).listen(PORT, '0.0.0.0', () => {
+      console.log(`[HTTPS] Cookie Jar receiver listening on https://${TS_DOMAIN}:${PORT}`);
+      console.log(`Cookies will be saved to: ${COOKIES_DIR}`);
+      console.log(`Auth token configured: ${!!process.env.COOKIE_JAR_TOKEN}`);
+    });
+  } else {
+    console.warn('[WARNING] TLS certs not found — falling back to plain HTTP');
+    console.warn(`[WARNING] Expected certs at: ${CERT_PATH}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[HTTP] Cookie Jar receiver listening on http://0.0.0.0:${PORT}`);
+      console.log(`Cookies will be saved to: ${COOKIES_DIR}`);
+      console.log(`Auth token configured: ${!!process.env.COOKIE_JAR_TOKEN}`);
+    });
+  }
+}
+
+module.exports = { app, convertCookies, COOKIES_DIR, EXTENSION_DIR };

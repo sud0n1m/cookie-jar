@@ -30,6 +30,27 @@ else
   echo ""
 fi
 
+# Provision Tailscale TLS certs
+TS_DOMAIN="ziggy.tail7f7a2.ts.net"
+CERTS_DIR="$SCRIPT_DIR/certs"
+mkdir -p "$CERTS_DIR"
+
+echo "🔒 Provisioning Tailscale TLS certificate..."
+if command -v tailscale &>/dev/null; then
+  if tailscale cert --cert-file "$CERTS_DIR/$TS_DOMAIN.crt" --key-file "$CERTS_DIR/$TS_DOMAIN.key" "$TS_DOMAIN" 2>/dev/null; then
+    chmod 600 "$CERTS_DIR/$TS_DOMAIN.key"
+    chmod 644 "$CERTS_DIR/$TS_DOMAIN.crt"
+    echo "✓ TLS cert provisioned for $TS_DOMAIN"
+  else
+    echo "⚠️  Failed to provision TLS cert — server will fall back to HTTP"
+    echo "   You can manually run: tailscale cert --cert-file $CERTS_DIR/$TS_DOMAIN.crt --key-file $CERTS_DIR/$TS_DOMAIN.key $TS_DOMAIN"
+  fi
+else
+  echo "⚠️  tailscale CLI not found — server will fall back to HTTP"
+  echo "   Install Tailscale and run install.sh again for HTTPS support"
+fi
+echo ""
+
 # Create launchd plist
 echo "⚙️  Creating launchd service..."
 

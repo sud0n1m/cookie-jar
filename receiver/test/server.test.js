@@ -7,7 +7,7 @@ const path = require('path');
 // Set auth token before importing server
 process.env.COOKIE_JAR_TOKEN = 'test-token-12345';
 
-const { app, convertCookies, COOKIES_DIR } = require('../server');
+const { app, convertCookies, COOKIES_DIR, EXTENSION_DIR } = require('../server');
 
 const AUTH_HEADER = 'Bearer test-token-12345';
 
@@ -310,5 +310,86 @@ describe('convertCookies', () => {
   it('unknown format: returns cookies unchanged (defaults to raw)', () => {
     const result = convertCookies(SAMPLE_COOKIES, 'unknown-format', 'example.com');
     assert.deepEqual(result, SAMPLE_COOKIES);
+  });
+});
+
+// ─── Setup Endpoints ────────────────────────────────────────────
+
+const AdmZip = require('adm-zip');
+
+// Helper: get zip response as a buffer
+function getZipBuffer(req) {
+  return req
+    .buffer(true)
+    .parse((res, cb) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => cb(null, Buffer.concat(chunks)));
+    });
+}
+
+describe('GET /setup', () => {
+  it('returns HTML with status 200', async () => {
+    const res = await request(app).get('/setup');
+    assert.equal(res.status, 200);
+    assert.match(res.headers['content-type'], /html/);
+    assert.match(res.text, /Cookie Jar/);
+    assert.match(res.text, /Download Extension/);
+    assert.match(res.text, /chrome:\/\/extensions/);
+  });
+});
+
+describe('GET /setup/extension.zip', () => {
+  it('returns a zip with correct content-type', async () => {
+    const res = await getZipBuffer(request(app).get('/setup/extension.zip'));
+    assert.equal(res.status, 200);
+    assert.match(res.headers['content-type'], /application\/zip/);
+    assert.equal(res.headers['content-disposition'], 'attachment; filename="cookie-jar-extension.zip"');
+    // Verify it's a valid zip (starts with PK signature)
+    assert.equal(res.body[0], 0x50); // 'P'
+    assert.equal(res.body[1], 0x4B); // 'K'
+  });
+
+  it('zip contains config.json with correct receiver URL and token', async () => {
+    const res = await getZipBuffer(
+      request(app)
+        .get('/setup/extension.zip')
+        .set('Host', 'myhost.example.com:3333')
+    );
+    assert.equal(res.status, 200);
+
+    const zip = new AdmZip(res.body);
+    const configEntry = zip.getEntry('config.json');
+    assert.ok(configEntry, 'zip should contain config.json');
+
+    const config = JSON.parse(configEntry.getData().toString('utf8'));
+    assert.equal(config.receiverUrl, 'http://myhost.example.com:3333/api/cookies');
+    assert.equal(config.token, 'test-token-12345');
+  });
+
+  it('zip contains expected extension files', async () => {
+    const res = await getZipBuffer(request(app).get('/setup/extension.zip'));
+    assert.equal(res.status, 200);
+
+    const zip = new AdmZip(res.body);
+    const entryNames = zip.getEntries().map(e => e.entryName);
+
+    assert.ok(entryNames.includes('manifest.json'), 'zip should contain manifest.json');
+    assert.ok(entryNames.includes('popup.html'), 'zip should contain popup.html');
+    assert.ok(entryNames.includes('popup.js'), 'zip should contain popup.js');
+    assert.ok(entryNames.includes('options.html'), 'zip should contain options.html');
+    assert.ok(entryNames.includes('options.js'), 'zip should contain options.js');
+    assert.ok(entryNames.includes('config.json'), 'zip should contain config.json');
+  });
+
+  it('returns 500 when COOKIE_JAR_TOKEN is not set', async () => {
+    const original = process.env.COOKIE_JAR_TOKEN;
+    delete process.env.COOKIE_JAR_TOKEN;
+
+    const res = await request(app).get('/setup/extension.zip');
+    assert.equal(res.status, 500);
+    assert.match(res.body.error, /COOKIE_JAR_TOKEN not set/);
+
+    process.env.COOKIE_JAR_TOKEN = original;
   });
 });

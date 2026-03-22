@@ -7,6 +7,9 @@ package-lock.json
 .env.local
 .env.*.local
 
+# TLS certificates (SENSITIVE - never commit!)
+receiver/certs/
+
 # Cookies data (SENSITIVE - never commit!)
 receiver/cookies/
 receiver/cookies/*.json

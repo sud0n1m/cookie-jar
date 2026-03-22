@@ -1,10 +1,24 @@
-// Load saved settings
+// Load config.json defaults if present, then overlay chrome.storage settings
 async function loadSettings() {
-  const settings = await chrome.storage.sync.get({
+  let defaults = {
     receiverUrl: 'http://localhost:3333/api/cookies',
     bearerToken: ''
-  });
-  
+  };
+
+  // Check for baked-in config.json
+  try {
+    const resp = await fetch(chrome.runtime.getURL('config.json'));
+    if (resp.ok) {
+      const cfg = await resp.json();
+      defaults.receiverUrl = cfg.receiverUrl || defaults.receiverUrl;
+      defaults.bearerToken = cfg.token || defaults.bearerToken;
+    }
+  } catch (e) {
+    // config.json not present, use defaults
+  }
+
+  const settings = await chrome.storage.sync.get(defaults);
+
   document.getElementById('receiverUrl').value = settings.receiverUrl;
   document.getElementById('bearerToken').value = settings.bearerToken;
 }

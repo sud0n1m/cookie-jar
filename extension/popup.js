@@ -1,3 +1,29 @@
+// Load config from baked-in config.json, falling back to chrome.storage
+let _configCache = null;
+async function getConfig() {
+  if (_configCache) return _configCache;
+  try {
+    const resp = await fetch(chrome.runtime.getURL('config.json'));
+    if (resp.ok) {
+      const cfg = await resp.json();
+      _configCache = {
+        receiverUrl: cfg.receiverUrl || 'http://localhost:3333/api/cookies',
+        bearerToken: cfg.token || '',
+        fromConfig: true
+      };
+      return _configCache;
+    }
+  } catch (e) {
+    // config.json not present, fall back to storage
+  }
+  const settings = await chrome.storage.sync.get({
+    receiverUrl: 'http://localhost:3333/api/cookies',
+    bearerToken: ''
+  });
+  _configCache = { ...settings, fromConfig: false };
+  return _configCache;
+}
+
 // Get current tab and load cookies
 let currentDomain = '';
 let cookies = [];
@@ -46,7 +72,14 @@ async function init() {
     });
     
     document.getElementById('cookieCount').textContent = cookies.length;
-    
+
+    // Show configured badge if using config.json
+    const config = await getConfig();
+    if (config.fromConfig) {
+      const badge = document.getElementById('configBadge');
+      if (badge) badge.style.display = 'inline-block';
+    }
+
     // Enable button if we have cookies
     if (cookies.length === 0) {
       document.getElementById('sendBtn').disabled = true;
@@ -65,12 +98,9 @@ async function sendCookies() {
   btn.textContent = 'Sending...';
   
   try {
-    // Get settings
-    const settings = await chrome.storage.sync.get({
-      receiverUrl: 'http://localhost:3333/api/cookies',
-      bearerToken: ''
-    });
-    
+    // Get settings (config.json takes priority over chrome.storage)
+    const settings = await getConfig();
+
     if (!settings.bearerToken) {
       showStatus('⚠️ No auth token configured. Please set it in Settings.', 'error');
       btn.disabled = false;

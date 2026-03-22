@@ -15,10 +15,12 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "archiver": "^7.0.1",
     "cors": "^2.8.5",
     "express": "^4.18.2"
   },
   "devDependencies": {
+    "adm-zip": "^0.5.16",
     "supertest": "^7.2.2"
   }
 }
