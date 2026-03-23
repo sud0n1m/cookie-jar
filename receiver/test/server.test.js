@@ -7,7 +7,7 @@ const path = require('path');
 // Set auth token before importing server
 process.env.COOKIE_JAR_TOKEN = 'test-token-12345';
 
-const { app, convertCookies, COOKIES_DIR, EXTENSION_DIR } = require('../server');
+const { app, convertCookies, testSiteAccess, saveSiteRegistry, loadSiteRegistry, COOKIES_DIR, SITES_DIR, EXTENSION_DIR } = require('../server');
 
 const AUTH_HEADER = 'Bearer test-token-12345';
 
@@ -37,6 +37,14 @@ const SAMPLE_COOKIES = [
 // Clean up test cookie files
 function cleanupCookies(domain) {
   const filepath = path.join(COOKIES_DIR, `${domain}.json`);
+  if (fs.existsSync(filepath)) {
+    fs.unlinkSync(filepath);
+  }
+}
+
+// Clean up test site registry files
+function cleanupSiteRegistry(domain) {
+  const filepath = path.join(SITES_DIR, `${domain}.json`);
   if (fs.existsSync(filepath)) {
     fs.unlinkSync(filepath);
   }
@@ -453,5 +461,196 @@ describe('GET /setup/extension.zip', () => {
     assert.match(res.body.error, /COOKIE_JAR_TOKEN not set/);
 
     process.env.COOKIE_JAR_TOKEN = original;
+  });
+});
+
+// ─── Site Registry Functions (unit tests) ──────────────────────
+
+describe('saveSiteRegistry and loadSiteRegistry', () => {
+  afterEach(() => cleanupSiteRegistry('test-registry.com'));
+
+  it('saves and loads site registry entry', () => {
+    const data = {
+      access_method: 'curl',
+      bot_protection: 'none',
+      auth_cookies: ['session'],
+      notes: 'Test entry'
+    };
+
+    const saved = saveSiteRegistry('test-registry.com', data);
+    assert.equal(saved.domain, 'test-registry.com');
+    assert.equal(saved.access_method, 'curl');
+    assert.equal(saved.bot_protection, 'none');
+    assert.ok(saved.last_verified);
+
+    const loaded = loadSiteRegistry('test-registry.com');
+    assert.equal(loaded.domain, 'test-registry.com');
+    assert.equal(loaded.access_method, 'curl');
+    assert.deepEqual(loaded.auth_cookies, ['session']);
+  });
+
+  it('returns null for non-existent domain', () => {
+    const result = loadSiteRegistry('nonexistent.com');
+    assert.equal(result, null);
+  });
+
+  it('writes registry files with restricted permissions (0600)', () => {
+    saveSiteRegistry('test-registry.com', {
+      access_method: 'browser',
+      bot_protection: 'cloudflare'
+    });
+
+    const filepath = path.join(SITES_DIR, 'test-registry.com.json');
+    const stats = fs.statSync(filepath);
+    const mode = stats.mode & 0o777;
+    assert.equal(mode, 0o600);
+  });
+});
+
+// ─── Site Registry Endpoints ───────────────────────────────────
+
+describe('GET /api/sites', () => {
+  before(() => {
+    // Seed some test site entries
+    saveSiteRegistry('site1.com', {
+      access_method: 'curl',
+      bot_protection: 'none',
+      auth_cookies: ['session']
+    });
+    saveSiteRegistry('site2.com', {
+      access_method: 'browser',
+      bot_protection: 'cloudflare',
+      auth_cookies: ['cf_token']
+    });
+  });
+
+  after(() => {
+    cleanupSiteRegistry('site1.com');
+    cleanupSiteRegistry('site2.com');
+  });
+
+  it('returns list of all site registry entries', async () => {
+    const res = await request(app)
+      .get('/api/sites')
+      .set('Authorization', AUTH_HEADER);
+
+    assert.equal(res.status, 200);
+    assert.ok(res.body.count >= 2);
+    assert.ok(Array.isArray(res.body.sites));
+    
+    const domains = res.body.sites.map(s => s.domain);
+    assert.ok(domains.includes('site1.com'));
+    assert.ok(domains.includes('site2.com'));
+  });
+
+  it('requires authentication', async () => {
+    const res = await request(app).get('/api/sites');
+    assert.equal(res.status, 401);
+  });
+});
+
+describe('GET /api/sites/:domain', () => {
+  before(() => {
+    saveSiteRegistry('get-site-test.com', {
+      access_method: 'browser',
+      bot_protection: 'datadome',
+      auth_cookies: ['auth0', 'session'],
+      notes: 'Test site'
+    });
+  });
+
+  after(() => cleanupSiteRegistry('get-site-test.com'));
+
+  it('returns specific site registry entry', async () => {
+    const res = await request(app)
+      .get('/api/sites/get-site-test.com')
+      .set('Authorization', AUTH_HEADER);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.domain, 'get-site-test.com');
+    assert.equal(res.body.access_method, 'browser');
+    assert.equal(res.body.bot_protection, 'datadome');
+    assert.deepEqual(res.body.auth_cookies, ['auth0', 'session']);
+    assert.equal(res.body.notes, 'Test site');
+    assert.ok(res.body.last_verified);
+  });
+
+  it('returns 404 for unknown domain', async () => {
+    const res = await request(app)
+      .get('/api/sites/unknown-domain.com')
+      .set('Authorization', AUTH_HEADER);
+
+    assert.equal(res.status, 404);
+    assert.match(res.body.error, /No site registry entry found/);
+  });
+
+  it('requires authentication', async () => {
+    const res = await request(app).get('/api/sites/get-site-test.com');
+    assert.equal(res.status, 401);
+  });
+});
+
+describe('POST /api/sites/:domain/test', () => {
+  beforeEach(() => {
+    // Create test cookies file
+    fs.writeFileSync(
+      path.join(COOKIES_DIR, 'test-site-access.com.json'),
+      JSON.stringify({
+        domain: 'test-site-access.com',
+        cookies: [
+          { name: 'session_token', value: 'xyz', domain: '.test-site-access.com', path: '/' },
+          { name: 'user_pref', value: 'dark', domain: '.test-site-access.com', path: '/' }
+        ]
+      })
+    );
+  });
+
+  afterEach(() => {
+    cleanupCookies('test-site-access.com');
+    cleanupSiteRegistry('test-site-access.com');
+  });
+
+  it('tests site access and creates registry entry', async () => {
+    const res = await request(app)
+      .post('/api/sites/test-site-access.com/test')
+      .set('Authorization', AUTH_HEADER);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.ok(res.body.test_result);
+    assert.ok(res.body.registry_entry);
+    
+    assert.equal(res.body.registry_entry.domain, 'test-site-access.com');
+    assert.ok(['curl', 'browser'].includes(res.body.registry_entry.access_method));
+    assert.ok(res.body.registry_entry.last_verified);
+
+    // Verify registry file was created
+    const entry = loadSiteRegistry('test-site-access.com');
+    assert.ok(entry);
+    assert.equal(entry.domain, 'test-site-access.com');
+  });
+
+  it('extracts auth-related cookie names', async () => {
+    const res = await request(app)
+      .post('/api/sites/test-site-access.com/test')
+      .set('Authorization', AUTH_HEADER);
+
+    assert.equal(res.status, 200);
+    assert.ok(res.body.registry_entry.auth_cookies.includes('session_token'));
+  });
+
+  it('returns 404 when no cookies exist for domain', async () => {
+    const res = await request(app)
+      .post('/api/sites/no-cookies.com/test')
+      .set('Authorization', AUTH_HEADER);
+
+    assert.equal(res.status, 404);
+    assert.match(res.body.error, /No cookies found/);
+  });
+
+  it('requires authentication', async () => {
+    const res = await request(app)
+      .post('/api/sites/test-site-access.com/test');
+    assert.equal(res.status, 401);
   });
 });
