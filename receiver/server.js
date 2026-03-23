@@ -10,15 +10,19 @@ const archiver = require('archiver');
 const app = express();
 const PORT = 3333;
 const COOKIES_DIR = path.join(__dirname, 'cookies');
+const SITES_DIR = path.join(__dirname, 'sites');
 
 const TS_DOMAIN = 'ziggy.tail7f7a2.ts.net';
 const CERTS_DIR = path.join(__dirname, 'certs');
 const CERT_PATH = path.join(CERTS_DIR, `${TS_DOMAIN}.crt`);
 const KEY_PATH = path.join(CERTS_DIR, `${TS_DOMAIN}.key`);
 
-// Ensure cookies directory exists
+// Ensure directories exist
 if (!fs.existsSync(COOKIES_DIR)) {
   fs.mkdirSync(COOKIES_DIR, { recursive: true });
+}
+if (!fs.existsSync(SITES_DIR)) {
+  fs.mkdirSync(SITES_DIR, { recursive: true });
 }
 
 // Middleware
@@ -89,6 +93,32 @@ app.post('/api/cookies', authenticate, async (req, res) => {
     fs.chmodSync(filepath, 0o600);
     
     console.log(`[${new Date().toISOString()}] Saved ${cookies.length} cookies for ${domain}`);
+    
+    // Auto-test site access and update registry (async, don't block response)
+    testSiteAccess(domain, cookies).then(testResult => {
+      // Extract key auth cookie names
+      const authCookies = cookies
+        .filter(c => {
+          const name = c.name.toLowerCase();
+          return name.includes('session') || 
+                 name.includes('auth') || 
+                 name.includes('token') ||
+                 name.includes('user');
+        })
+        .map(c => c.name);
+      
+      saveSiteRegistry(domain, {
+        access_method: testResult.access_method,
+        bot_protection: testResult.bot_protection,
+        auth_cookies: authCookies,
+        notes: testResult.notes,
+        http_code: testResult.http_code
+      });
+      
+      console.log(`[${new Date().toISOString()}] Site registry updated for ${domain}: ${testResult.access_method}`);
+    }).catch(err => {
+      console.warn(`[${new Date().toISOString()}] Failed to test/update site registry for ${domain}:`, err.message);
+    });
     
     res.json({ 
       success: true, 
@@ -171,6 +201,91 @@ function convertCookies(cookies, format, domain) {
   }
 }
 
+// ─── Site Registry Functions ────────────────────────────────────
+
+// Test site access with cookies using curl
+async function testSiteAccess(domain, cookies) {
+  return new Promise((resolve) => {
+    try {
+      // Build cookie header
+      const cookieHeader = cookies
+        .map(c => `${c.name}=${c.value}`)
+        .join('; ');
+      
+      // Test with curl
+      const testUrl = `https://${domain}`;
+      const curlCmd = `curl -s -o /dev/null -w "%{http_code}" -H "Cookie: ${cookieHeader}" "${testUrl}"`;
+      
+      const statusCode = execSync(curlCmd, { 
+        timeout: 10000,
+        encoding: 'utf8'
+      }).trim();
+      
+      const httpCode = parseInt(statusCode, 10);
+      
+      // Determine results
+      let access_method = 'curl';
+      let bot_protection = 'none';
+      let notes = 'Works with simple curl + cookie header';
+      
+      if (httpCode === 403) {
+        access_method = 'browser';
+        bot_protection = 'detected';
+        notes = 'curl blocked (403). Likely bot protection - requires browser.';
+      } else if (httpCode === 401 || httpCode === 404) {
+        // These could be normal - not necessarily bot protection
+        notes = `Received ${httpCode} - check if authentication is working.`;
+      } else if (httpCode >= 500) {
+        notes = `Server error ${httpCode} - site may be down.`;
+      }
+      
+      resolve({
+        success: true,
+        access_method,
+        bot_protection,
+        http_code: httpCode,
+        notes
+      });
+      
+    } catch (error) {
+      // Curl failed - likely bot protection or network issue
+      resolve({
+        success: false,
+        access_method: 'browser',
+        bot_protection: 'detected',
+        http_code: null,
+        notes: `curl failed: ${error.message}. Likely requires browser.`
+      });
+    }
+  });
+}
+
+// Save site registry entry
+function saveSiteRegistry(domain, data) {
+  const filepath = path.join(SITES_DIR, `${domain}.json`);
+  const entry = {
+    domain,
+    access_method: data.access_method || 'curl',
+    bot_protection: data.bot_protection || 'none',
+    auth_cookies: data.auth_cookies || [],
+    last_verified: new Date().toISOString(),
+    notes: data.notes || '',
+    ...data
+  };
+  
+  fs.writeFileSync(filepath, JSON.stringify(entry, null, 2), { mode: 0o600 });
+  return entry;
+}
+
+// Load site registry entry
+function loadSiteRegistry(domain) {
+  const filepath = path.join(SITES_DIR, `${domain}.json`);
+  if (!fs.existsSync(filepath)) {
+    return null;
+  }
+  return JSON.parse(fs.readFileSync(filepath, 'utf8'));
+}
+
 // GET /api/cookies/:domain - Retrieve saved cookies with format conversion
 app.get('/api/cookies/:domain', authenticate, (req, res) => {
   try {
@@ -219,6 +334,109 @@ app.get('/api/cookies/:domain', authenticate, (req, res) => {
     res.status(500).json({ 
       error: 'Failed to retrieve cookies',
       message: error.message 
+    });
+  }
+});
+
+// ─── Site Registry Endpoints ────────────────────────────────────
+
+// GET /api/sites - List all site registry entries
+app.get('/api/sites', authenticate, (req, res) => {
+  try {
+    const files = fs.readdirSync(SITES_DIR)
+      .filter(f => f.endsWith('.json'));
+    
+    const sites = files.map(filename => {
+      const filepath = path.join(SITES_DIR, filename);
+      return JSON.parse(fs.readFileSync(filepath, 'utf8'));
+    });
+    
+    res.json({
+      count: sites.length,
+      sites
+    });
+  } catch (error) {
+    console.error('Error listing sites:', error);
+    res.status(500).json({
+      error: 'Failed to list sites',
+      message: error.message
+    });
+  }
+});
+
+// GET /api/sites/:domain - Get site registry entry for specific domain
+app.get('/api/sites/:domain', authenticate, (req, res) => {
+  try {
+    const { domain } = req.params;
+    const entry = loadSiteRegistry(domain);
+    
+    if (!entry) {
+      return res.status(404).json({
+        error: `No site registry entry found for: ${domain}`
+      });
+    }
+    
+    res.json(entry);
+  } catch (error) {
+    console.error('Error retrieving site:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve site',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/sites/:domain/test - Test site access and update registry
+app.post('/api/sites/:domain/test', authenticate, async (req, res) => {
+  try {
+    const { domain } = req.params;
+    
+    // Load cookies for this domain
+    const filename = `${domain}.json`;
+    const cookieFilepath = path.join(COOKIES_DIR, filename);
+    
+    if (!fs.existsSync(cookieFilepath)) {
+      return res.status(404).json({
+        error: `No cookies found for domain: ${domain}. Upload cookies first.`
+      });
+    }
+    
+    const cookieData = JSON.parse(fs.readFileSync(cookieFilepath, 'utf8'));
+    
+    // Test access
+    const testResult = await testSiteAccess(domain, cookieData.cookies);
+    
+    // Extract key auth cookie names (cookies that look auth-related)
+    const authCookies = cookieData.cookies
+      .filter(c => {
+        const name = c.name.toLowerCase();
+        return name.includes('session') || 
+               name.includes('auth') || 
+               name.includes('token') ||
+               name.includes('user');
+      })
+      .map(c => c.name);
+    
+    // Save registry entry
+    const registryEntry = saveSiteRegistry(domain, {
+      access_method: testResult.access_method,
+      bot_protection: testResult.bot_protection,
+      auth_cookies: authCookies,
+      notes: testResult.notes,
+      http_code: testResult.http_code
+    });
+    
+    res.json({
+      success: true,
+      test_result: testResult,
+      registry_entry: registryEntry
+    });
+    
+  } catch (error) {
+    console.error('Error testing site:', error);
+    res.status(500).json({
+      error: 'Failed to test site',
+      message: error.message
     });
   }
 });
@@ -411,4 +629,13 @@ if (require.main === module) {
   }
 }
 
-module.exports = { app, convertCookies, COOKIES_DIR, EXTENSION_DIR };
+module.exports = { 
+  app, 
+  convertCookies, 
+  testSiteAccess,
+  saveSiteRegistry,
+  loadSiteRegistry,
+  COOKIES_DIR, 
+  SITES_DIR,
+  EXTENSION_DIR 
+};

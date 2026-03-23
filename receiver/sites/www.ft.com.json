@@ -1,0 +1,8 @@
+{
+  "domain": "www.ft.com",
+  "access_method": "curl",
+  "bot_protection": "none",
+  "auth_cookies": ["FTSession_s"],
+  "last_verified": "2026-03-22T19:46:00Z",
+  "notes": "Works with simple curl + cookie header"
+}
