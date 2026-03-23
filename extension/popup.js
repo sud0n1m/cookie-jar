@@ -61,6 +61,15 @@ async function init() {
       });
       cookies = [...cookies, ...dotCookies];
     }
+
+    // Also fetch parent domain cookies (e.g. .ft.com when on www.ft.com)
+    const parts = currentDomain.split('.');
+    if (parts.length > 2) {
+      const parentDomain = parts.slice(1).join('.');
+      const parentCookies = await chrome.cookies.getAll({ domain: parentDomain });
+      const parentDotCookies = await chrome.cookies.getAll({ domain: '.' + parentDomain });
+      cookies = [...cookies, ...parentCookies, ...parentDotCookies];
+    }
     
     // Remove duplicates
     const seen = new Set();
