@@ -4,6 +4,8 @@
 
 > Transfer authenticated browser sessions to headless browsers by sending cookies from your real browser to automation scripts.
 
+![Cookie Jar Demo](demo.gif)
+
 ## The Problem
 
 Headless browsers can't log into websites with:
