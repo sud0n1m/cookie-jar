@@ -105,25 +105,24 @@ The installer will:
 
 ### 2. Install the Chrome Extension
 
-1. Generate icons:
-   ```bash
-   cd extension
-   npm install canvas
-   node generate-icons.js
-   ```
+**Option A: Self-configuring download (recommended)**
 
-2. Load in Chrome:
-   - Open `chrome://extensions/`
-   - Enable "Developer mode" (top right)
-   - Click "Load unpacked"
-   - Select the `extension/` folder
+Once the receiver is running, open its setup page in Chrome:
 
-3. Configure:
-   - Click the Cookie Jar icon in Chrome toolbar
-   - Click "⚙️ Settings"
-   - Enter receiver URL: `http://localhost:3333/api/cookies` (or your server URL)
-   - Paste the auth token from step 1
-   - Click "Save Settings"
+```
+http://localhost:3333/setup
+```
+
+Click **Download Extension**, unzip, and load it as an unpacked extension in `chrome://extensions/`. The extension comes pre-configured with your receiver URL and auth token — no manual setup needed.
+
+**Option B: Load from source**
+
+1. Open `chrome://extensions/`
+2. Enable "Developer mode" (top right)
+3. Click "Load unpacked" and select the `extension/` folder
+4. Click the Cookie Jar icon → ⚙️ Settings
+5. Enter receiver URL: `http://localhost:3333/api/cookies`
+6. Paste the auth token from step 1
 
 ### 3. Use It
 
