@@ -43,3 +43,4 @@ build/
 examples/*.png
 examples/*.html
 .beans/
+.beans.yml
