@@ -42,3 +42,4 @@ build/
 # Screenshots from examples
 examples/*.png
 examples/*.html
+.beans/
