@@ -113,6 +113,8 @@ Once the receiver is running, open its setup page in Chrome:
 http://localhost:3333/setup
 ```
 
+![Setup Page](setup-page.jpg)
+
 Click **Download Extension**, unzip, and load it as an unpacked extension in `chrome://extensions/`. The extension comes pre-configured with your receiver URL and auth token — no manual setup needed.
 
 **Option B: Load from source**
