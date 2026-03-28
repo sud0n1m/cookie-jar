@@ -61,12 +61,34 @@ No more fighting with bot detection. No more manually solving CAPTCHAs in CI. Ju
 - **Research tools** that need access to authenticated APIs
 - **Automation scripts** for sites with bot detection
 
+## AI Agent Integration
+
+Cookie Jar was built to solve a key problem for AI agents: **accessing authenticated web content**. When your agent needs to read a paywalled article or access content behind a login, Cookie Jar provides the session cookies without the agent needing to handle CAPTCHAs, 2FA, or bot detection.
+
+### OpenClaw
+
+[OpenClaw](https://github.com/openclaw/openclaw) agents can use Cookie Jar out of the box. The receiver's site registry API tells the agent whether to use simple `curl` or a full headless browser for each domain:
+
+```bash
+# Agent checks the best strategy for a site
+curl -H "Authorization: Bearer $COOKIE_JAR_TOKEN" \
+  http://localhost:3333/api/sites/www.ft.com
+
+# → {"access_method": "curl", "bot_protection": "none", ...}
+```
+
+See [AGENT.md](AGENT.md) for full agent integration docs, including per-site access strategies, cookie expiry handling, and troubleshooting.
+
+### Any AI Agent Framework
+
+Cookie Jar works with any agent that can make HTTP requests. The receiver exposes a simple REST API — fetch cookies, inject them into your browser automation tool of choice, and access authenticated content. Works with LangChain, CrewAI, AutoGPT, or any custom agent framework.
+
 ## Quick Start
 
 ### 1. Install the Receiver Service
 
 ```bash
-git clone https://github.com/your-username/cookie-jar.git
+git clone https://github.com/sud0n1m/cookie-jar.git
 cd cookie-jar/receiver
 ./install.sh
 ```
